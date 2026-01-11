@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Multiplayer Cessna Game</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+body { margin:0; overflow:hidden; font-family:Arial; background:#87ceeb; }
+canvas { display:block; }
+#hud { position:fixed; top:10px; left:10px; color:white; background:rgba(0,0,0,.45); padding:10px; border-radius:8px; }
+#titleLabel { color:#00ffd5; font-size:12px }
+#titleSelect { position:fixed; top:70px; left:10px; background:rgba(0,0,0,.45); color:white; border:none; padding:6px; border-radius:6px; }
+#chat { position:fixed; bottom:90px; left:10px; width:260px; max-height:180px; overflow-y:auto; background:rgba(0,0,0,.45); color:white; padding:8px; border-radius:8px; font-size:13px; }
+#chatInput { position:fixed; bottom:50px; left:10px; width:260px; padding:8px; border-radius:6px; border:none; outline:none; display:none; }
+.controls { position:fixed; bottom:10px; width:100%; display:flex; justify-content:center; }
+.pad { display:grid; grid-template-columns:60px 60px 60px; grid-template-rows:60px 60px 60px; gap:5px; }
+.btn { background:rgba(255,255,255,.25); color:white; font-size:22px; text-align:center; line-height:60px; border-radius:12px; user-select:none; }
+</style>
+</head>
+<body>
+
+<div id="hud">
+  <div id="usernameLabel"></div>
+  <div id="titleLabel"></div>
+</div>
+
+<select id="titleSelect">
+  <option>Pilot</option>
+  <option>Game Dev</option>
+  <option>Tester</option>
+  <option>Builder</option>
+</select>
+
+<div id="chat"></div>
+<input id="chatInput" placeholder="Press T then Enter">
+
+<div class="controls">
+  <div class="pad">
+    <div></div><div class="btn" id="up">⬆</div><div></div>
+    <div class="btn" id="left">⬅</div><div></div><div class="btn" id="right">➡</div>
+    <div></div><div class="btn" id="down">⬇</div><div></div>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.158/build/three.module.js";
+
+/* ---------- USER ---------- */
+let username = localStorage.getItem("username") || prompt("Username:");
+if(!username) username="Pilot";
+localStorage.setItem("username", username);
+document.getElementById("usernameLabel").textContent = username;
+
+/* ---------- SPECIAL USERS ---------- */
+const specialUsers = { "IMyu":"👑 Owner / Lead Dev", "Admin":"🛡️ Administrator" };
+
+/* ---------- TITLE ---------- */
+const titleLabel = document.getElementById("titleLabel");
+const titleSelect = document.getElementById("titleSelect");
+let title;
+if(specialUsers[username]){
+  title = specialUsers[username];
+  titleLabel.textContent = title;
+  titleSelect.style.display="none";
+  localStorage.setItem("title", title);
+}else{
+  title = localStorage.getItem("title") || "Pilot";
+  titleLabel.textContent = title;
+  titleSelect.value = title;
+  titleSelect.addEventListener("change",()=>{ title = titleSelect.value; titleLabel.textContent = title; localStorage.setItem("title",title); });
+}
+
+/* ---------- CHAT ---------- */
+const chat = document.getElementById("chat");
+const chatInput = document.getElementById("chatInput");
+let chatting=false;
+function addMessage(msg){ const d=document.createElement("div"); d.innerHTML=msg; chat.appendChild(d); chat.scrollTop=chat.scrollHeight; }
+window.addEventListener("keydown", e=>{
+  if(e.key.toLowerCase()==="t" && !chatting){ chatting=true; chatInput.style.display="block"; chatInput.focus(); }
+  else if(e.key==="Enter" && chatting){ if(chatInput.value.trim()){ sendChat(chatInput.value); chatInput.value=""; } chatInput.style.display="none"; chatting=false; }
+});
+
+/* ---------- THREE.JS ---------- */
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87ceeb);
+const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, .1, 2000);
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+
+/* Lights */
+scene.add(new THREE.HemisphereLight(0xffffff,0x444444,1.2));
+const sun = new THREE.DirectionalLight(0xffffff,1);
+sun.position.set(100,200,100);
+scene.add(sun);
+
+/* ---------- CESSNA PLANE ---------- */
+function createPlane(color=0xffffff){
+  const plane = new THREE.Group();
+  const fuselage = new THREE.Mesh(new THREE.CylinderGeometry(0.45,0.45,4.5,20), new THREE.MeshStandardMaterial({color}));
+  fuselage.rotation.x = Math.PI/2; plane.add(fuselage);
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.45,20,20), new THREE.MeshStandardMaterial({color:0xff0000}));
+  nose.position.z=-2.7; plane.add(nose);
+  const cockpit = new THREE.Mesh(new THREE.CylinderGeometry(0.6,0.6,0.6,20), new THREE.MeshStandardMaterial({color:0xeeeeee}));
+  cockpit.rotation.x=Math.PI/2; cockpit.position.y=0.45; plane.add(cockpit);
+  const wing = new THREE.Mesh(new THREE.BoxGeometry(6.5,0.15,1.5), new THREE.MeshStandardMaterial({color:0xdddddd}));
+  wing.position.y=0.7; plane.add(wing);
+  const hTail = new THREE.Mesh(new THREE.BoxGeometry(2.2,0.12,0.6), new THREE.MeshStandardMaterial({color:0xdddddd}));
+  hTail.position.set(0,0.1,2.3); plane.add(hTail);
+  const vTail = new THREE.Mesh(new THREE.BoxGeometry(0.15,1.1,0.6), new THREE.MeshStandardMaterial({color:0xdddddd}));
+  vTail.position.set(0,0.7,2.3); plane.add(vTail);
+  const propeller = new THREE.Mesh(new THREE.BoxGeometry(1.6,0.1,0.1), new THREE.MeshStandardMaterial({color:0x111111}));
+  propeller.position.z=-2.7; plane.propeller = propeller; plane.add(propeller);
+  return plane;
+}
+
+/* ---------- NAME LABEL ---------- */
+function createNameLabel(username, title){
+  const canvas = document.createElement("canvas");
+  canvas.width = 256; canvas.height = 64;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.font = "28px Arial"; ctx.fillStyle="white"; ctx.textAlign="center"; ctx.fillText(username, canvas.width/2,28);
+  ctx.font = "20px Arial"; ctx.fillStyle="#00ffd5"; ctx.fillText(title, canvas.width/2,56);
+  const texture = new THREE.CanvasTexture(canvas);
+  const material = new THREE.SpriteMaterial({ map: texture, transparent:true });
+  const sprite = new THREE.Sprite(material);
+  sprite.scale.set(4,1,1);
+  sprite.position.y=2.5;
+  return sprite;
+}
+
+/* ---------- PLAYER ---------- */
+const plane = createPlane(); plane.position.y=5; scene.add(plane);
+plane.nameLabel = createNameLabel(username, title);
+plane.add(plane.nameLabel);
+
+/* ---------- Ground ---------- */
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(10000,10000), new THREE.MeshStandardMaterial({color:0x228b22}));
+ground.rotation.x=-Math.PI/2; scene.add(ground);
+
+/* ---------- Controls ---------- */
+const keys={};
+window.addEventListener("keydown",e=>keys[e.key.toLowerCase()]=true);
+window.addEventListener("keyup",e=>keys[e.key.toLowerCase()]=false);
+function bind(id,key){ const b=document.getElementById(id); b.addEventListener("touchstart",e=>{e.preventDefault();keys[key]=true}); b.addEventListener("touchend",()=>keys[key]=false); }
+bind("up","w"); bind("down","s"); bind("left","a"); bind("right","d");
+
+/* ---------- MULTIPLAYER ---------- */
+const socket = new WebSocket("ws://localhost:8080");
+let otherPlayers = {};
+
+socket.addEventListener("message", e => {
+  const data = JSON.parse(e.data);
+  if(data.type==="init"){ for(let id in data.players){ if(id!==socket.id) addOtherPlayer(data.players[id]); } }
+  if(data.type==="newPlayer") addOtherPlayer(data.player);
+  if(data.type==="update"){ const p = otherPlayers[data.player.id]; if(p){ p.group.position.lerp(new THREE.Vector3(data.player.position.x,data.player.position.y,data.player.position.z),0.2); p.group.rotation.set(data.player.rotation.x,data.player.rotation.y,data.player.rotation.z); } }
+  if(data.type==="removePlayer"){ if(otherPlayers[data.id]){ scene.remove(otherPlayers[data.id].group); delete otherPlayers[data.id]; } }
+  if(data.type==="chat") addMessage(data.message);
+});
+
+function addOtherPlayer(playerData){
+  const group = createPlane(0xaaaaaa);
+  group.position.set(playerData.position?.x||0,playerData.position?.y||5,playerData.position?.z||0);
+  const label = createNameLabel(playerData.username, playerData.title);
+  group.add(label); group.nameLabel = label;
+  scene.add(group);
+  otherPlayers[playerData.id] = { group, username:playerData.username, title:playerData.title };
+}
+
+/* ---------- SEND CHAT ---------- */
+function sendChat(msg){ socket.send(JSON.stringify({ type:"chat", msg, username, title })); }
+
+/* ---------- ANIMATE LOOP ---------- */
+let speed = 0.25;
+function animate(){
+  requestAnimationFrame(animate);
+
+  if(!chatting){
+    if(keys.w) plane.rotation.x -= .02;
+    if(keys.s) plane.rotation.x += .02;
+    if(keys.a) plane.rotation.y += .03;
+    if(keys.d) plane.rotation.y -= .03;
+  }
+
+  const dir = new THREE.Vector3(0,0,-1).applyQuaternion(plane.quaternion);
+  plane.position.add(dir.multiplyScalar(speed));
+  plane.propeller.rotation.z += .6;
+
+  camera.position.lerp(plane.position.clone().add(new THREE.Vector3(0,3,8).applyQuaternion(plane.quaternion)), .1);
+  camera.lookAt(plane.position);
+
+  // send updates
+  if(socket.readyState===1){
+    socket.send(JSON.stringify({
+      type:"update",
+      username,
+      title,
+      position:{x:plane.position.x, y:plane.position.y, z:plane.position.z},
+      rotation:{x:plane.rotation.x, y:plane.rotation.y, z:plane.rotation.z}
+    }));
+  }
+
+  // update other players
+  Object.values(otherPlayers).forEach(p=>{
+    p.group.propeller.rotation.z += .6;
+    if(p.group.nameLabel) p.group.nameLabel.quaternion.copy(camera.quaternion);
+  });
+
+  // update own label to face camera
+  plane.nameLabel.quaternion.copy(camera.quaternion);
+
+  renderer.render(scene,camera);
+}
+animate();
+
+window.addEventListener("resize", ()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); });
+
+</script>
+
+</body>
+</html>
